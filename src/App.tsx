@@ -3,13 +3,15 @@ import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { SessionManager } from './components/SessionManager'
 import { ViCheatSheet } from './components/ViCheatSheet'
-import { Folder, File, ArrowUp, Upload, HelpCircle, Server, HardDrive, Cpu, MemoryStick } from 'lucide-react'
+import { SnippetManager } from './components/SnippetManager'
+import { Folder, File, ArrowUp, Upload, HelpCircle, Server, HardDrive, Cpu, MemoryStick, ClipboardList } from 'lucide-react'
 import 'xterm/css/xterm.css'
 
 const { ipcRenderer } = window.require('electron')
 
 export default function App() {
   const termRef = useRef<HTMLDivElement>(null)
+  const termInstance = useRef<Terminal | null>(null)
   const fitAddon = useRef<FitAddon | null>(null)
   
   const [files, setFiles] = useState<any[]>([])
@@ -17,12 +19,13 @@ export default function App() {
   const [connected, setConnected] = useState(false)
   const [sessions, setSessions] = useState({ groups: [], sessions: [] })
   const [showViHelp, setShowViHelp] = useState(false)
+  const [showSnippets, setShowSnippets] = useState(false)
   const [serverStats, setServerStats] = useState<any>(null)
 
   // Login Form
   const [loginForm, setLoginForm] = useState({ 
     host: '', username: '', password: '', port: '22', 
-    privateKey: '', group: 'Default', name: 'New Session' 
+    privateKey: '', passphrase: '', group: 'Default', name: 'New Session' 
   })
   const [showLogin, setShowLogin] = useState(true)
 
@@ -53,6 +56,7 @@ export default function App() {
       fontFamily: 'Consolas, monospace',
       fontSize: 14
     })
+    termInstance.current = term
     fitAddon.current = new FitAddon()
     term.loadAddon(fitAddon.current)
     term.open(termRef.current)
@@ -120,6 +124,13 @@ export default function App() {
     await ipcRenderer.invoke('export-sessions', sessions)
   }
 
+  const pasteSnippet = (cmd: string) => {
+    if (termInstance.current) {
+      ipcRenderer.send('term-input', cmd + '\n')
+      termInstance.current.focus()
+    }
+  }
+
   return (
     <div style={{ display: 'flex', height: '100vh', backgroundColor: '#1e1e1e', color: '#ccc' }}>
       
@@ -140,6 +151,9 @@ export default function App() {
         <div style={{ height: 40, borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', padding: '0 10px', gap: 10 }}>
           {connected && <div style={{ color: '#4ec9b0' }}>Connected: {currentPath}</div>}
           <div style={{ flex: 1 }} />
+          <button onClick={() => setShowSnippets(!showSnippets)} title="Snippets" style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer' }}>
+            <ClipboardList size={18} />
+          </button>
           <button onClick={() => setShowViHelp(!showViHelp)} title="Vi Cheat Sheet" style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer' }}>
             <HelpCircle size={18} />
           </button>
@@ -172,6 +186,7 @@ export default function App() {
                )}
 
                {showViHelp && <ViCheatSheet onClose={() => setShowViHelp(false)} />}
+               {showSnippets && <SnippetManager onClose={() => setShowSnippets(false)} onPaste={pasteSnippet} />}
             </div>
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -187,14 +202,25 @@ export default function App() {
                   <input placeholder="Password" type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} />
                   
                   {/* PEM Key Input */}
-                  <div style={{ display: 'flex', gap: 5 }}>
-                    <input 
-                      placeholder="Private Key Path (Optional)" 
-                      value={loginForm.privateKey} 
-                      onChange={e => setLoginForm({...loginForm, privateKey: e.target.value})} 
-                      style={{ flex: 1, fontSize: '0.8em' }}
-                    />
-                    <button onClick={handleKeySelect} style={{ padding: '0 8px' }}>...</button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <div style={{ display: 'flex', gap: 5 }}>
+                      <input 
+                        placeholder="Private Key Path (Optional)" 
+                        value={loginForm.privateKey} 
+                        onChange={e => setLoginForm({...loginForm, privateKey: e.target.value})} 
+                        style={{ flex: 1, fontSize: '0.8em' }}
+                      />
+                      <button onClick={handleKeySelect} style={{ padding: '0 8px' }}>...</button>
+                    </div>
+                    {loginForm.privateKey && (
+                      <input 
+                        placeholder="Key Passphrase (if encrypted)" 
+                        type="password"
+                        value={loginForm.passphrase} 
+                        onChange={e => setLoginForm({...loginForm, passphrase: e.target.value})} 
+                        style={{ fontSize: '0.8em' }}
+                      />
+                    )}
                   </div>
 
                   <input placeholder="Group" value={loginForm.group} onChange={e => setLoginForm({...loginForm, group: e.target.value})} />

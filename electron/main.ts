@@ -6,8 +6,9 @@ import os from 'os'
 
 let mainWindow: BrowserWindow | null
 const DATA_FILE = path.join(app.getPath('userData'), 'neonterm-sessions.json')
+const SNIPPET_FILE = path.join(app.getPath('userData'), 'neonterm-snippets.json')
 
-// --- Helper: Load/Save Sessions ---
+// --- Helper: Load/Save Data ---
 function loadSessions() {
   if (!fs.existsSync(DATA_FILE)) return { groups: [], sessions: [] }
   try {
@@ -19,6 +20,15 @@ function loadSessions() {
 
 function saveSessions(data: any) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2))
+}
+
+function loadSnippets() {
+  if (!fs.existsSync(SNIPPET_FILE)) return []
+  try { return JSON.parse(fs.readFileSync(SNIPPET_FILE, 'utf-8')) } catch { return [] }
+}
+
+function saveSnippets(data: any) {
+  fs.writeFileSync(SNIPPET_FILE, JSON.stringify(data, null, 2))
 }
 
 function createWindow() {
@@ -52,10 +62,6 @@ function startPolling(conn: Client, event: any) {
   if (statsInterval) clearInterval(statsInterval)
   
   const fetchStats = () => {
-    // Linux-specific stats command (lightweight)
-    // 1. Load Avg (CPU proxy)
-    // 2. Memory Usage (Used/Total)
-    // 3. Disk Usage (Root partition)
     const cmd = `
       echo "LOAD:$(cat /proc/loadavg | awk '{print $1}')"
       free -m | awk 'NR==2{printf "MEM:%s/%sMB %.1f%%", $3, $2, $3*100/$2}'
@@ -67,7 +73,6 @@ function startPolling(conn: Client, event: any) {
       let output = ''
       stream.on('data', (data: any) => { output += data.toString() })
       stream.on('close', () => {
-        // Parse output
         const stats: any = {}
         output.split('\n').forEach(line => {
           if (line.startsWith('LOAD:')) stats.cpu = `Load: ${line.substring(5)}`
@@ -86,7 +91,6 @@ function startPolling(conn: Client, event: any) {
 ipcMain.on('connect-ssh', (event, config) => {
   const conn = new Client()
   
-  // Handle Private Key (PEM) reading
   try {
     if (config.privateKey) {
       config.privateKey = fs.readFileSync(config.privateKey)
@@ -98,11 +102,8 @@ ipcMain.on('connect-ssh', (event, config) => {
 
   conn.on('ready', () => {
     event.reply('ssh-ready')
-
-    // Start Polling Stats
     startPolling(conn, event)
     
-    // Start Shell
     conn.shell((err, stream) => {
       if (err) return event.reply('ssh-error', err.message)
       
@@ -120,7 +121,6 @@ ipcMain.on('connect-ssh', (event, config) => {
         stream.write(data)
       })
       
-      // Start SFTP
       conn.sftp((err, sftp) => {
         if (err) return
         activeSftp = sftp
@@ -136,7 +136,6 @@ function refreshSftp(event: any) {
   if (!activeSftp) return
   activeSftp.readdir(currentPath, (err: any, list: any[]) => {
     if (err) return
-    // Simple sort: folders first
     const sorted = list.sort((a, b) => {
       const aDir = a.attrs.mode & 0o40000 ? 1 : 0
       const bDir = b.attrs.mode & 0o40000 ? 1 : 0
@@ -157,11 +156,9 @@ ipcMain.on('sftp-navigate', (event, dir) => {
 
 ipcMain.on('sftp-upload', (event, localPaths) => {
   if (!activeSftp) return
-  
   localPaths.forEach((localPath: string) => {
     const filename = path.basename(localPath)
     const remotePath = path.join(currentPath, filename).replace(/\\/g, '/')
-    
     activeSftp.fastPut(localPath, remotePath, (err: any) => {
       if (err) console.error("Upload failed", err)
       else refreshSftp(event)
@@ -173,7 +170,11 @@ ipcMain.on('sftp-upload', (event, localPaths) => {
 ipcMain.handle('get-sessions', () => loadSessions())
 ipcMain.handle('save-sessions', (_, data) => saveSessions(data))
 
-// File Dialog for Private Key
+// --- Snippet Management ---
+ipcMain.handle('get-snippets', () => loadSnippets())
+ipcMain.handle('save-snippets', (_, data) => saveSnippets(data))
+
+// File Dialog
 ipcMain.handle('dialog-open-file', async () => {
   const result = await dialog.showOpenDialog(mainWindow!, {
     properties: ['openFile'],
@@ -182,7 +183,7 @@ ipcMain.handle('dialog-open-file', async () => {
   return result
 })
 
-// Session Import/Export
+// Import/Export
 ipcMain.handle('import-sessions', async () => {
   const { filePaths } = await dialog.showOpenDialog(mainWindow!, {
     properties: ['openFile'],
