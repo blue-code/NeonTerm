@@ -166,6 +166,54 @@ ipcMain.on('sftp-upload', (event, localPaths) => {
   })
 })
 
+function downloadDir(sftp: any, src: string, dest: string, cb: () => void) {
+  fs.mkdirSync(dest, { recursive: true })
+  
+  sftp.readdir(src, (err: any, list: any[]) => {
+    if (err) return cb()
+    
+    let pending = list.length
+    if (!pending) return cb()
+    
+    list.forEach((item: any) => {
+      const srcPath = path.posix.join(src, item.filename)
+      const destPath = path.join(dest, item.filename)
+      
+      if (item.attrs.mode & 0o40000) { // Directory
+        downloadDir(sftp, srcPath, destPath, () => {
+          if (!--pending) cb()
+        })
+      } else { // File
+        sftp.fastGet(srcPath, destPath, (err: any) => {
+          if (!--pending) cb()
+        })
+      }
+    })
+  })
+}
+
+ipcMain.on('sftp-drag-start', (event, file) => {
+  const tempPath = path.join(os.tmpdir(), file.filename)
+  const remotePath = path.posix.join(currentPath, file.filename)
+  
+  // Quick download to temp for drag-out
+  // Note: Large folders/files might lag UI. Better to use async download indication.
+  // For basic support, we download small files synchronously or fast.
+  if (file.attrs.mode & 0o40000) {
+     // Skip folder drag for now in simple impl, or zip it
+     return 
+  }
+
+  activeSftp.fastGet(remotePath, tempPath, (err: any) => {
+    if (!err) {
+      event.sender.startDrag({
+        file: tempPath,
+        icon: '' // default icon
+      })
+    }
+  })
+})
+
 // --- Session Management ---
 ipcMain.handle('get-sessions', () => loadSessions())
 ipcMain.handle('save-sessions', (_, data) => saveSessions(data))
