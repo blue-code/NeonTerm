@@ -20,7 +20,10 @@ export default function App() {
   const [serverStats, setServerStats] = useState<any>(null)
 
   // Login Form
-  const [loginForm, setLoginForm] = useState({ host: '', username: '', password: '', port: '22', group: 'Default', name: 'New Session' })
+  const [loginForm, setLoginForm] = useState({ 
+    host: '', username: '', password: '', port: '22', 
+    privateKey: '', group: 'Default', name: 'New Session' 
+  })
   const [showLogin, setShowLogin] = useState(true)
 
   useEffect(() => {
@@ -84,6 +87,13 @@ export default function App() {
     }
   }
 
+  const handleKeySelect = async () => {
+    const result = await ipcRenderer.invoke('dialog-open-file')
+    if (result && !result.canceled && result.filePaths.length > 0) {
+      setLoginForm({ ...loginForm, privateKey: result.filePaths[0] })
+    }
+  }
+
   const saveSession = () => {
     const newSessions = { ...sessions }
     let group = newSessions.groups.find((g: any) => g.name === loginForm.group)
@@ -101,6 +111,15 @@ export default function App() {
     ipcRenderer.invoke('save-sessions', newSessions)
   }
 
+  const handleImport = async () => {
+    const data = await ipcRenderer.invoke('import-sessions')
+    if (data) setSessions(data)
+  }
+
+  const handleExport = async () => {
+    await ipcRenderer.invoke('export-sessions', sessions)
+  }
+
   return (
     <div style={{ display: 'flex', height: '100vh', backgroundColor: '#1e1e1e', color: '#ccc' }}>
       
@@ -110,6 +129,8 @@ export default function App() {
         onConnect={(s: any) => connect(s)}
         onSave={() => setShowLogin(true)}
         onDelete={() => {}} 
+        onImport={handleImport}
+        onExport={handleExport}
       />
 
       {/* Main Area */}
@@ -158,13 +179,29 @@ export default function App() {
                 <h3>New Connection</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <input placeholder="Name" value={loginForm.name} onChange={e => setLoginForm({...loginForm, name: e.target.value})} />
-                  <input placeholder="Host" value={loginForm.host} onChange={e => setLoginForm({...loginForm, host: e.target.value})} />
-                  <input placeholder="User" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} />
-                  <input placeholder="Pass" type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} />
-                  <input placeholder="Group" value={loginForm.group} onChange={e => setLoginForm({...loginForm, group: e.target.value})} />
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={() => connect(loginForm)}>Connect</button>
-                    <button onClick={saveSession}>Save</button>
+                    <input placeholder="Host" style={{ flex: 1 }} value={loginForm.host} onChange={e => setLoginForm({...loginForm, host: e.target.value})} />
+                    <input placeholder="Port" style={{ width: 60 }} value={loginForm.port} onChange={e => setLoginForm({...loginForm, port: e.target.value})} />
+                  </div>
+                  <input placeholder="User" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} />
+                  <input placeholder="Password" type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} />
+                  
+                  {/* PEM Key Input */}
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    <input 
+                      placeholder="Private Key Path (Optional)" 
+                      value={loginForm.privateKey} 
+                      onChange={e => setLoginForm({...loginForm, privateKey: e.target.value})} 
+                      style={{ flex: 1, fontSize: '0.8em' }}
+                    />
+                    <button onClick={handleKeySelect} style={{ padding: '0 8px' }}>...</button>
+                  </div>
+
+                  <input placeholder="Group" value={loginForm.group} onChange={e => setLoginForm({...loginForm, group: e.target.value})} />
+                  
+                  <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                    <button onClick={() => connect(loginForm)} style={{ flex: 1, padding: 8, cursor: 'pointer' }}>Connect</button>
+                    <button onClick={saveSession} style={{ flex: 1, padding: 8, cursor: 'pointer' }}>Save</button>
                   </div>
                 </div>
               </div>

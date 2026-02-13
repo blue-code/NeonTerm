@@ -1,7 +1,7 @@
 import React from 'react';
-import { Folder, Monitor, Trash2, Edit, ChevronRight, ChevronDown, Plus } from 'lucide-react';
+import { Folder, Monitor, Trash2, Edit, ChevronRight, ChevronDown, Plus, Download, Upload } from 'lucide-react';
 
-export const SessionManager = ({ sessions, onConnect, onSave, onDelete, onSelectGroup }: any) => {
+export const SessionManager = ({ sessions, onConnect, onSave, onDelete, onImport, onExport }: any) => {
   const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
 
   const toggleGroup = (group: string) => {
@@ -10,11 +10,19 @@ export const SessionManager = ({ sessions, onConnect, onSave, onDelete, onSelect
 
   return (
     <div style={{ width: 250, borderRight: '1px solid #333', backgroundColor: '#1e1e1e', color: '#fff', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: 10, borderBottom: '1px solid #333', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+      <div style={{ padding: 10, borderBottom: '1px solid #333', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>Sessions</span>
-        <button onClick={() => onSave('new')} title="Add Session" style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}>
-          <Plus size={16} />
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onImport} title="Import (JSON)" style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', opacity: 0.8 }}>
+            <Upload size={16} />
+          </button>
+          <button onClick={onExport} title="Export (JSON)" style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', opacity: 0.8 }}>
+            <Download size={16} />
+          </button>
+          <button onClick={() => onSave('new')} title="Add Session" style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}>
+            <Plus size={16} />
+          </button>
+        </div>
       </div>
       
       <div style={{ flex: 1, overflowY: 'auto' }}>

@@ -86,6 +86,16 @@ function startPolling(conn: Client, event: any) {
 ipcMain.on('connect-ssh', (event, config) => {
   const conn = new Client()
   
+  // Handle Private Key (PEM) reading
+  try {
+    if (config.privateKey) {
+      config.privateKey = fs.readFileSync(config.privateKey)
+    }
+  } catch (err: any) {
+    event.reply('ssh-error', 'Key Load Error: ' + err.message)
+    return
+  }
+
   conn.on('ready', () => {
     event.reply('ssh-ready')
 
@@ -162,3 +172,38 @@ ipcMain.on('sftp-upload', (event, localPaths) => {
 // --- Session Management ---
 ipcMain.handle('get-sessions', () => loadSessions())
 ipcMain.handle('save-sessions', (_, data) => saveSessions(data))
+
+// File Dialog for Private Key
+ipcMain.handle('dialog-open-file', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openFile'],
+    filters: [{ name: 'Key Files', extensions: ['pem', 'ppk', 'key', 'txt', '*'] }]
+  })
+  return result
+})
+
+// Session Import/Export
+ipcMain.handle('import-sessions', async () => {
+  const { filePaths } = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openFile'],
+    filters: [{ name: 'JSON Files', extensions: ['json'] }]
+  })
+  if (filePaths.length > 0) {
+    const data = JSON.parse(fs.readFileSync(filePaths[0], 'utf-8'))
+    saveSessions(data)
+    return data
+  }
+  return null
+})
+
+ipcMain.handle('export-sessions', async (_, data) => {
+  const { filePath } = await dialog.showSaveDialog(mainWindow!, {
+    defaultPath: 'neonterm-sessions.json',
+    filters: [{ name: 'JSON Files', extensions: ['json'] }]
+  })
+  if (filePath) {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2))
+    return true
+  }
+  return false
+})
