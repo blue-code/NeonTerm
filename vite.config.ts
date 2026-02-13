@@ -8,14 +8,20 @@ export default defineConfig({
     react(),
     electron([
       {
-        // Main-Process entry file of the Electron App.
+        // Main process
         entry: 'electron/main.ts',
+        vite: {
+          build: {
+            rollupOptions: {
+              // Externalize ssh2 and native modules
+              external: ['ssh2', 'cpu-features', 'fs', 'path', 'os', 'child_process']
+            }
+          }
+        }
       },
       {
         entry: 'electron/preload.ts',
-        onstart(options) {
-          options.reload()
-        },
+        onstart(options) { options.reload() },
       },
     ]),
     renderer(),
