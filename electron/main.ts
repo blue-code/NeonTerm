@@ -167,7 +167,12 @@ ipcMain.on('connect-ssh', (event, { sessionId, config }) => {
     })
   }).on('error', (err) => {
     event.reply('ssh-error', { sessionId, message: err.message })
-  }).connect(config)
+  }).connect({
+    ...config,
+    readyTimeout: 10000,
+    keepaliveInterval: 10000,
+    keepaliveCountMax: 3
+  })
 })
 
 // SSH 연결 해제
@@ -265,8 +270,8 @@ ipcMain.on('sftp-upload', (event, { sessionId, remotePath, localPaths }) => {
       if (err) {
         event.reply('ssh-error', { sessionId, message: `업로드 실패 (${filename}): ${err.message}` })
       }
-      // 모든 파일 업로드 완료 후 목록 갱신
-      if (completed === localPaths.length) {
+      // 모든 파일 업로드 완료 후, 세션이 아직 유효하면 목록 갱신
+      if (completed === localPaths.length && connections[sessionId]) {
         refreshSftp(sessionId, remotePath, event)
       }
     })
@@ -307,6 +312,15 @@ ipcMain.handle('dialog-open-file', async () => {
 })
 
 // --- Import/Export 구현 ---
+// Import한 세션 JSON 구조 검증
+function validateSessionData(data: any): boolean {
+  if (!data || typeof data !== 'object') return false
+  if (!Array.isArray(data.groups)) return false
+  return data.groups.every((g: any) =>
+    g && typeof g.name === 'string' && Array.isArray(g.sessions)
+  )
+}
+
 ipcMain.handle('import-sessions', async () => {
   if (!mainWindow) return null
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -316,9 +330,25 @@ ipcMain.handle('import-sessions', async () => {
   if (result.canceled || result.filePaths.length === 0) return null
   try {
     const raw = JSON.parse(fs.readFileSync(result.filePaths[0], 'utf-8'))
-    // 가져온 데이터를 암호화하여 로컬 저장
-    saveSessions(raw)
-    return raw
+    if (!validateSessionData(raw)) return null
+
+    // 기존 세션과 병합 (덮어쓰기 방지)
+    const existing = loadSessions()
+    raw.groups.forEach((importGroup: any) => {
+      const match = existing.groups.find((g: any) => g.name === importGroup.name)
+      if (match) {
+        // 같은 그룹이면 세션 추가 (중복 host+username 제외)
+        importGroup.sessions.forEach((s: any) => {
+          const dup = match.sessions.find((e: any) => e.host === s.host && e.username === s.username)
+          if (!dup) match.sessions.push(s)
+        })
+      } else {
+        existing.groups.push(importGroup)
+      }
+    })
+
+    saveSessions(existing)
+    return existing
   } catch {
     return null
   }

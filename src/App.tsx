@@ -4,7 +4,7 @@ import { FitAddon } from 'xterm-addon-fit'
 import { SessionManager } from './components/SessionManager'
 import { ViCheatSheet } from './components/ViCheatSheet'
 import { SnippetManager } from './components/SnippetManager'
-import { Folder, File, ArrowUp, Upload, HelpCircle, HardDrive, Cpu, MemoryStick, ClipboardList, X, Plus, AlertTriangle } from 'lucide-react'
+import { Folder, File, ArrowUp, Upload, HelpCircle, HardDrive, Cpu, MemoryStick, ClipboardList, X, Plus, AlertTriangle, RefreshCw } from 'lucide-react'
 import 'xterm/css/xterm.css'
 
 const api = window.electronAPI
@@ -55,7 +55,7 @@ export default function App() {
     api.invoke('get-sessions').then(setSessions).catch(() => {
       showToast('세션 목록을 불러오지 못했습니다', 'error')
     })
-  }, [])
+  }, [showToast])
 
   // IPC 이벤트 구독 — on()이 반환하는 해제 함수로 정리
   useEffect(() => {
@@ -146,6 +146,26 @@ export default function App() {
     delete termRefs.current[id]
   }
 
+  // SSH 연결 파라미터 검증
+  const validateConfig = (config: any): string | null => {
+    if (!config.host?.trim()) return 'Host를 입력하세요'
+    if (!config.username?.trim()) return 'Username을 입력하세요'
+    const port = parseInt(config.port, 10)
+    if (isNaN(port) || port < 1 || port > 65535) return 'Port는 1~65535 범위여야 합니다'
+    if (!config.password && !config.privateKey) return 'Password 또는 Private Key를 입력하세요'
+    return null
+  }
+
+  // 연결 끊긴 세션 재연결
+  const reconnect = (sessionId: string) => {
+    const session = terminals.find(t => t.id === sessionId)
+    if (!session?.config) return
+    setTerminals(prev => prev.map(t =>
+      t.id === sessionId ? { ...t, connected: false, files: [], serverStats: null } : t
+    ))
+    api.send('connect-ssh', { sessionId, config: session.config })
+  }
+
   const connect = (sessionId: string, config: any) => {
     if (!termInstances.current[sessionId] && termRefs.current[sessionId]) {
       const term = new Terminal({
@@ -178,6 +198,8 @@ export default function App() {
 
     let targetPath: string
     if (target === '..') {
+      // 루트에서 더 올라가지 않도록 가드
+      if (session.currentPath === '/') return
       const parts = session.currentPath.split('/')
       parts.pop()
       targetPath = parts.join('/') || '/'
@@ -213,20 +235,16 @@ export default function App() {
   }
 
   const saveSession = () => {
-    const newSessions = { ...sessions }
+    const newSessions = JSON.parse(JSON.stringify(sessions))
     let group = newSessions.groups.find((g: any) => g.name === loginForm.group)
     if (!group) {
       group = { name: loginForm.group, sessions: [] }
-      newSessions.groups.push(group as any)
+      newSessions.groups.push(group)
     }
-
-    group.sessions.push({
-      id: Date.now(),
-      ...loginForm
-    })
-
+    group.sessions.push({ id: Date.now(), ...loginForm })
     setSessions(newSessions)
     api.invoke('save-sessions', newSessions)
+    showToast('세션을 저장했습니다', 'info')
   }
 
   const deleteSession = (groupName: string, sessionId: number) => {
@@ -404,7 +422,18 @@ export default function App() {
             {/* 툴바 */}
             <div style={{ height: 40, borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', padding: '0 10px', gap: 10 }}>
               {activeSession.connected && <div style={{ color: '#4ec9b0', fontSize: '0.9em' }}>Connected: {activeSession.config?.host}</div>}
-              {!activeSession.connected && activeSession.config && <div style={{ color: '#f44336', fontSize: '0.9em' }}>Disconnected</div>}
+              {!activeSession.connected && activeSession.config && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: '#f44336', fontSize: '0.9em' }}>Disconnected</span>
+                  <button
+                    onClick={() => reconnect(activeSessionId)}
+                    title="재연결"
+                    style={{ background: 'none', border: '1px solid #555', borderRadius: 4, color: '#4ec9b0', cursor: 'pointer', padding: '2px 8px', fontSize: '0.8em', display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <RefreshCw size={12} /> Reconnect
+                  </button>
+                </div>
+              )}
               <div style={{ flex: 1 }} />
               <button onClick={() => setShowSnippets(!showSnippets)} title="Snippets" style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer' }}>
                 <ClipboardList size={18} />
@@ -481,7 +510,11 @@ export default function App() {
                     <input placeholder="Group" value={loginForm.group} onChange={e => setLoginForm({ ...loginForm, group: e.target.value })} />
 
                     <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-                      <button onClick={() => connect(activeSessionId, loginForm)} style={{ flex: 1, padding: 8, cursor: 'pointer' }}>Connect</button>
+                      <button onClick={() => {
+                        const err = validateConfig(loginForm)
+                        if (err) { showToast(err); return }
+                        connect(activeSessionId, loginForm)
+                      }} style={{ flex: 1, padding: 8, cursor: 'pointer' }}>Connect</button>
                       <button onClick={saveSession} style={{ flex: 1, padding: 8, cursor: 'pointer' }}>Save</button>
                     </div>
                   </div>
