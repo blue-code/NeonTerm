@@ -99,8 +99,21 @@ function createWindow() {
 
 app.whenReady().then(createWindow)
 
-// 앱 종료 시 임시 파일 정리
+// macOS: 모든 창이 닫혀도 앱 유지, Dock 클릭 시 창 복원
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow()
+})
+
+// 앱 종료 시 모든 SSH 연결 종료 및 임시 파일 정리
 app.on('will-quit', () => {
+  Object.keys(connections).forEach(id => {
+    try { connections[id].conn.end() } catch { /* 이미 종료됨 */ }
+    cleanupSession(id)
+  })
   tempFiles.forEach(f => {
     try { fs.unlinkSync(f) } catch { /* 이미 삭제됐거나 접근 불가 */ }
   })
@@ -120,6 +133,14 @@ const connections: Record<string, SessionState> = {}
 ipcMain.on('term-input', (_, { sessionId, data }) => {
   const session = connections[sessionId]
   if (session?.stream) session.stream.write(data)
+})
+
+// PTY 크기 동기화 — 렌더러에서 xterm 크기 변경 시 원격 셸에 반영
+ipcMain.on('term-resize', (_, { sessionId, cols, rows }) => {
+  const session = connections[sessionId]
+  if (session?.stream) {
+    try { session.stream.setWindow(rows, cols, rows * 16, cols * 8) } catch { /* 스트림 종료 상태 */ }
+  }
 })
 
 // SSH 연결

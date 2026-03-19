@@ -1,7 +1,7 @@
 import React from 'react';
 import { Folder, Monitor, Trash2, Edit, ChevronRight, ChevronDown, Plus, Download, Upload } from 'lucide-react';
 
-export const SessionManager = ({ sessions, onConnect, onSave, onDelete, onImport, onExport }: any) => {
+export const SessionManager = ({ sessions, onConnect, onSave, onDelete, onEdit, onImport, onExport }: any) => {
   const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
 
   const toggleGroup = (group: string) => {
@@ -48,7 +48,8 @@ export const SessionManager = ({ sessions, onConnect, onSave, onDelete, onImport
                   >
                     <Monitor size={14} color="#4ec9b0" />
                     <span style={{ flex: 1 }}>{sess.name}</span>
-                    <Trash2 size={12} onClick={() => onDelete(group.name, sess.id)} style={{ opacity: 0.5 }} />
+                    <span onClick={() => onEdit(group.name, sess)} style={{ opacity: 0.5, cursor: 'pointer', display: 'flex' }}><Edit size={12} /></span>
+                    <span onClick={() => onDelete(group.name, sess.id)} style={{ opacity: 0.5, cursor: 'pointer', display: 'flex' }}><Trash2 size={12} /></span>
                   </div>
                 ))}
               </div>

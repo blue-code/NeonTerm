@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 // 허용된 IPC 채널만 노출 (보안 — 화이트리스트 방식)
 const SEND_CHANNELS = [
-  'connect-ssh', 'disconnect-ssh', 'term-input',
+  'connect-ssh', 'disconnect-ssh', 'term-input', 'term-resize',
   'sftp-navigate', 'sftp-upload', 'sftp-drag-start'
 ]
 

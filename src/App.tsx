@@ -43,6 +43,7 @@ export default function App() {
     host: '', username: '', password: '', port: '22',
     privateKey: '', passphrase: '', group: 'Default', name: 'New Session'
   })
+  const [editingSession, setEditingSession] = useState<{ groupName: string; id: number } | null>(null)
 
   // 토스트 알림
   const showToast = useCallback((message: string, type: 'error' | 'info' = 'error') => {
@@ -101,6 +102,53 @@ export default function App() {
       offServerStats()
     }
   }, [showToast])
+
+  // 탭 전환 시 터미널 크기 재조정
+  useEffect(() => {
+    if (activeSessionId && fitAddons.current[activeSessionId]) {
+      setTimeout(() => {
+        fitAddons.current[activeSessionId]?.fit()
+        const term = termInstances.current[activeSessionId]
+        if (term) api.send('term-resize', { sessionId: activeSessionId, cols: term.cols, rows: term.rows })
+      }, 0)
+    }
+  }, [activeSessionId])
+
+  // 키보드 단축키 (capture phase — xterm보다 먼저 처리)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+        e.preventDefault()
+        createNewTab()
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'W') {
+        e.preventDefault()
+        if (activeSessionId) {
+          api.send('disconnect-ssh', activeSessionId)
+          setTerminals(prev => {
+            const filtered = prev.filter(t => t.id !== activeSessionId)
+            setActiveSessionId(filtered.length > 0 ? filtered[filtered.length - 1].id : null)
+            return filtered
+          })
+          if (resizeObservers.current[activeSessionId]) { resizeObservers.current[activeSessionId].disconnect(); delete resizeObservers.current[activeSessionId] }
+          if (termInstances.current[activeSessionId]) { termInstances.current[activeSessionId].dispose(); delete termInstances.current[activeSessionId] }
+          delete fitAddons.current[activeSessionId]
+          delete termRefs.current[activeSessionId]
+        }
+      }
+      if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault()
+        if (terminals.length < 2) return
+        const idx = terminals.findIndex(t => t.id === activeSessionId)
+        const next = e.shiftKey
+          ? (idx - 1 + terminals.length) % terminals.length
+          : (idx + 1) % terminals.length
+        setActiveSessionId(terminals[next].id)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  })
 
   const createNewTab = (config: any = null) => {
     const newId = Date.now().toString()
@@ -183,7 +231,13 @@ export default function App() {
       termInstances.current[sessionId] = term
       fitAddons.current[sessionId] = fitAddon
 
-      const resizeObserver = new ResizeObserver(() => fitAddon.fit())
+      // 초기 PTY 크기 전송
+      api.send('term-resize', { sessionId, cols: term.cols, rows: term.rows })
+
+      const resizeObserver = new ResizeObserver(() => {
+        fitAddon.fit()
+        api.send('term-resize', { sessionId, cols: term.cols, rows: term.rows })
+      })
       resizeObserver.observe(termRefs.current[sessionId]!)
       resizeObservers.current[sessionId] = resizeObserver
     }
@@ -236,15 +290,43 @@ export default function App() {
 
   const saveSession = () => {
     const newSessions = JSON.parse(JSON.stringify(sessions))
+    const isEditing = editingSession !== null
+
+    // 편집 모드면 기존 세션 제거
+    if (isEditing && editingSession) {
+      const oldGroup = newSessions.groups.find((g: any) => g.name === editingSession.groupName)
+      if (oldGroup) {
+        oldGroup.sessions = oldGroup.sessions.filter((s: any) => s.id !== editingSession.id)
+        if (oldGroup.sessions.length === 0) {
+          newSessions.groups = newSessions.groups.filter((g: any) => g.name !== editingSession.groupName)
+        }
+      }
+    }
+
     let group = newSessions.groups.find((g: any) => g.name === loginForm.group)
     if (!group) {
       group = { name: loginForm.group, sessions: [] }
       newSessions.groups.push(group)
     }
-    group.sessions.push({ id: Date.now(), ...loginForm })
+    group.sessions.push({ id: isEditing ? editingSession!.id : Date.now(), ...loginForm })
     setSessions(newSessions)
     api.invoke('save-sessions', newSessions)
-    showToast('세션을 저장했습니다', 'info')
+    showToast(isEditing ? '세션을 수정했습니다' : '세션을 저장했습니다', 'info')
+    setEditingSession(null)
+  }
+
+  // 저장된 세션 편집 — 로그인 폼에 데이터 로드
+  const editSession = (groupName: string, sess: any) => {
+    setEditingSession({ groupName, id: sess.id })
+    setLoginForm({
+      host: sess.host || '', username: sess.username || '', password: sess.password || '',
+      port: sess.port || '22', privateKey: sess.privateKey || '', passphrase: sess.passphrase || '',
+      group: sess.group || groupName, name: sess.name || ''
+    })
+    // 로그인 폼이 보이도록 사이드바를 sessions 탭으로 유지
+    if (activeSessionId) {
+      setTerminals(prev => prev.map(t => t.id === activeSessionId ? { ...t, activeTab: 'sessions' } : t))
+    }
   }
 
   const deleteSession = (groupName: string, sessionId: number) => {
@@ -377,6 +459,7 @@ export default function App() {
                   }}
                   onSave={() => {}}
                   onDelete={deleteSession}
+                  onEdit={editSession}
                   onImport={handleImport}
                   onExport={handleExport}
                 />
@@ -443,12 +526,20 @@ export default function App() {
               </button>
             </div>
 
-            {/* 터미널 컨테이너 */}
+            {/* 터미널 컨테이너 — 세션별 div를 항상 마운트하여 탭 전환 시 xterm 상태 보존 */}
             <div style={{ flex: 1, position: 'relative', display: activeSession.connected || activeSession.config ? 'flex' : 'none', flexDirection: 'column' }}>
-              <div
-                ref={el => { if (el) termRefs.current[activeSessionId] = el }}
-                style={{ flex: 1, width: '100%', overflow: 'hidden' }}
-              />
+              <div style={{ flex: 1, position: 'relative' }}>
+                {terminals.map(t => (
+                  <div
+                    key={t.id}
+                    ref={el => { if (el) termRefs.current[t.id] = el }}
+                    style={{
+                      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                      display: t.id === activeSessionId ? 'block' : 'none'
+                    }}
+                  />
+                ))}
+              </div>
 
               {/* 서버 통계 */}
               {activeSession.serverStats && (
@@ -515,7 +606,7 @@ export default function App() {
                         if (err) { showToast(err); return }
                         connect(activeSessionId, loginForm)
                       }} style={{ flex: 1, padding: 8, cursor: 'pointer' }}>Connect</button>
-                      <button onClick={saveSession} style={{ flex: 1, padding: 8, cursor: 'pointer' }}>Save</button>
+                      <button onClick={saveSession} style={{ flex: 1, padding: 8, cursor: 'pointer' }}>{editingSession ? 'Update' : 'Save'}</button>
                     </div>
                   </div>
                 </div>
