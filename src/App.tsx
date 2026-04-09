@@ -217,9 +217,32 @@ export default function App() {
   const connect = (sessionId: string, config: any) => {
     if (!termInstances.current[sessionId] && termRefs.current[sessionId]) {
       const term = new Terminal({
-        theme: { background: '#1e1e1e' },
-        fontFamily: 'Consolas, monospace',
-        fontSize: 14
+        theme: {
+          background: '#050507',
+          foreground: '#f2f2f2',
+          cursor: '#00d992',
+          cursorAccent: '#050507',
+          selectionBackground: 'rgba(0, 217, 146, 0.25)',
+          black: '#3d3a39',
+          brightBlack: '#8b949e',
+          green: '#00d992',
+          brightGreen: '#2fd6a1',
+          blue: '#818cf8',
+          brightBlue: '#4cb3d4',
+          red: '#fb565b',
+          brightRed: '#fd9c9f',
+          yellow: '#ffba00',
+          brightYellow: '#ffdd80',
+          magenta: '#818cf8',
+          brightMagenta: '#b8b3b0',
+          cyan: '#4cb3d4',
+          brightCyan: '#00d992',
+          white: '#f2f2f2',
+          brightWhite: '#ffffff'
+        },
+        fontFamily: 'SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace',
+        fontSize: 14,
+        cursorBlink: true
       })
       const fitAddon = new FitAddon()
       term.loadAddon(fitAddon)
@@ -365,20 +388,22 @@ export default function App() {
   const activeSession = terminals.find(t => t.id === activeSessionId)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: '#1e1e1e', color: '#ccc' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: '#050507', color: '#f2f2f2', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif' }}>
 
       {/* 토스트 알림 */}
       {toasts.length > 0 && (
-        <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ position: 'fixed', top: 12, right: 12, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {toasts.map(t => (
             <div key={t.id} style={{
               padding: '10px 16px', borderRadius: 6, maxWidth: 400, fontSize: '0.85em',
-              backgroundColor: t.type === 'error' ? '#5a1d1d' : '#1d3a5a',
-              border: `1px solid ${t.type === 'error' ? '#f44336' : '#4ec9b0'}`,
-              color: '#fff', display: 'flex', alignItems: 'center', gap: 8,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+              backgroundColor: '#101010',
+              border: `1px solid ${t.type === 'error' ? '#fb565b' : '#00d992'}`,
+              color: '#f2f2f2', display: 'flex', alignItems: 'center', gap: 8,
+              boxShadow: t.type === 'error'
+                ? '0 0 12px rgba(251, 86, 91, 0.3), rgba(0,0,0,0.7) 0px 8px 24px'
+                : '0 0 12px rgba(0, 217, 146, 0.3), rgba(0,0,0,0.7) 0px 8px 24px'
             }}>
-              <AlertTriangle size={14} color={t.type === 'error' ? '#f44336' : '#4ec9b0'} />
+              <AlertTriangle size={14} color={t.type === 'error' ? '#fb565b' : '#00d992'} />
               {t.message}
             </div>
           ))}
@@ -386,25 +411,30 @@ export default function App() {
       )}
 
       {/* 탭 바 */}
-      <div style={{ height: 35, backgroundColor: '#252526', display: 'flex', alignItems: 'center', overflowX: 'auto', borderBottom: '1px solid #1e1e1e' }}>
+      <div style={{ height: 38, backgroundColor: '#101010', display: 'flex', alignItems: 'center', overflowX: 'auto', borderBottom: '1px solid #3d3a39' }}>
         {terminals.map(t => (
           <div
             key={t.id}
             onClick={() => setActiveSessionId(t.id)}
             style={{
-              padding: '0 10px', height: '100%', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minWidth: 120, maxWidth: 200,
-              backgroundColor: activeSessionId === t.id ? '#1e1e1e' : '#2d2d2d',
-              borderRight: '1px solid #1e1e1e',
-              color: activeSessionId === t.id ? '#fff' : '#888'
+              padding: '0 14px', height: '100%', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', minWidth: 120, maxWidth: 200,
+              backgroundColor: activeSessionId === t.id ? '#050507' : '#101010',
+              borderRight: '1px solid #3d3a39',
+              borderBottom: activeSessionId === t.id ? '2px solid #00d992' : '2px solid transparent',
+              color: activeSessionId === t.id ? '#f2f2f2' : '#8b949e',
+              transition: 'all 0.15s ease'
             }}
           >
+            {activeSessionId === t.id && (
+              <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#00d992', boxShadow: '0 0 6px #00d992', flexShrink: 0 }} />
+            )}
             <span style={{ fontSize: '0.85em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {!t.connected && t.config ? '(끊김) ' : ''}{t.name}
             </span>
-            <X size={14} onClick={(e) => closeTab(t.id, e)} style={{ opacity: 0.6 }} />
+            <X size={14} onClick={(e) => closeTab(t.id, e)} style={{ opacity: 0.5, flexShrink: 0 }} />
           </div>
         ))}
-        <button onClick={() => createNewTab()} style={{ height: '100%', width: 35, background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <button onClick={() => createNewTab()} style={{ height: '100%', width: 38, background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Plus size={16} />
         </button>
       </div>
@@ -414,17 +444,19 @@ export default function App() {
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
           {/* 좌측 사이드바 */}
-          <div style={{ width: 280, borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', backgroundColor: '#252526' }}>
+          <div style={{ width: 280, borderRight: '1px solid #3d3a39', display: 'flex', flexDirection: 'column', backgroundColor: '#101010' }}>
             {/* 사이드바 탭 헤더 */}
-            <div style={{ display: 'flex', borderBottom: '1px solid #333' }}>
+            <div style={{ display: 'flex', borderBottom: '1px solid #3d3a39' }}>
               <div
                 onClick={() => setTerminals(prev => prev.map(t => t.id === activeSessionId ? { ...t, activeTab: 'sessions' } : t))}
                 style={{
                   flex: 1, padding: 10, cursor: 'pointer', textAlign: 'center',
-                  backgroundColor: activeSession.activeTab === 'sessions' ? '#1e1e1e' : 'transparent',
-                  borderBottom: activeSession.activeTab === 'sessions' ? '2px solid #4ec9b0' : 'none',
-                  fontWeight: activeSession.activeTab === 'sessions' ? 'bold' : 'normal',
-                  fontSize: '0.9em'
+                  backgroundColor: activeSession.activeTab === 'sessions' ? '#050507' : 'transparent',
+                  borderBottom: activeSession.activeTab === 'sessions' ? '2px solid #00d992' : '2px solid transparent',
+                  fontWeight: activeSession.activeTab === 'sessions' ? 600 : 400,
+                  fontSize: '0.9em',
+                  color: activeSession.activeTab === 'sessions' ? '#f2f2f2' : '#8b949e',
+                  transition: 'all 0.15s ease'
                 }}
               >
                 Sessions
@@ -433,11 +465,13 @@ export default function App() {
                 onClick={() => activeSession.connected && setTerminals(prev => prev.map(t => t.id === activeSessionId ? { ...t, activeTab: 'sftp' } : t))}
                 style={{
                   flex: 1, padding: 10, cursor: activeSession.connected ? 'pointer' : 'default', textAlign: 'center',
-                  backgroundColor: activeSession.activeTab === 'sftp' ? '#1e1e1e' : 'transparent',
-                  borderBottom: activeSession.activeTab === 'sftp' ? '2px solid #dcb67a' : 'none',
-                  fontWeight: activeSession.activeTab === 'sftp' ? 'bold' : 'normal',
+                  backgroundColor: activeSession.activeTab === 'sftp' ? '#050507' : 'transparent',
+                  borderBottom: activeSession.activeTab === 'sftp' ? '2px solid #818cf8' : '2px solid transparent',
+                  fontWeight: activeSession.activeTab === 'sftp' ? 600 : 400,
                   opacity: activeSession.connected ? 1 : 0.5,
-                  fontSize: '0.9em'
+                  fontSize: '0.9em',
+                  color: activeSession.activeTab === 'sftp' ? '#f2f2f2' : '#8b949e',
+                  transition: 'all 0.15s ease'
                 }}
               >
                 SFTP
@@ -469,15 +503,15 @@ export default function App() {
                   onDragOver={e => e.preventDefault()}
                   onDrop={(e) => handleFileDrop(e, activeSessionId, activeSession.currentPath)}
                 >
-                  <div style={{ padding: 10, borderBottom: '1px solid #333', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span title={activeSession.currentPath} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200, fontSize: '0.85em' }}>
+                  <div style={{ padding: 10, borderBottom: '1px solid #3d3a39', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span title={activeSession.currentPath} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200, fontSize: '0.85em', color: '#818cf8' }}>
                       {activeSession.currentPath}
                     </span>
-                    <div title="Drag files here">
+                    <div title="Drag files here" style={{ color: '#8b949e' }}>
                       <Upload size={14} />
                     </div>
                   </div>
-                  <div style={{ padding: 5, borderBottom: '1px solid #333', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.9em' }} onClick={() => handleSftpNavigate(activeSessionId, '..')}>
+                  <div style={{ padding: '6px 10px', borderBottom: '1px solid #3d3a39', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.9em', color: '#b8b3b0' }} onClick={() => handleSftpNavigate(activeSessionId, '..')}>
                     <ArrowUp size={14} /> <span>Up Directory</span>
                   </div>
                   <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -487,10 +521,10 @@ export default function App() {
                         draggable
                         onDragStart={(e) => handleFileDragStart(e, f, activeSessionId, activeSession.currentPath)}
                         onDoubleClick={() => f.attrs.mode & 0o40000 && handleSftpNavigate(activeSessionId, f.filename)}
-                        style={{ padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.9em' }}
+                        style={{ padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.9em', borderBottom: '1px solid rgba(61,58,57,0.3)' }}
                       >
-                        {f.attrs.mode & 0o40000 ? <Folder size={14} color="#dcb67a" /> : <File size={14} color="#ccc" />}
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.filename}</span>
+                        {f.attrs.mode & 0o40000 ? <Folder size={14} color="#818cf8" /> : <File size={14} color="#b8b3b0" />}
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#f2f2f2' }}>{f.filename}</span>
                       </div>
                     ))}
                   </div>
@@ -500,28 +534,36 @@ export default function App() {
           </div>
 
           {/* 우측 메인 영역 */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
             {/* 툴바 */}
-            <div style={{ height: 40, borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', padding: '0 10px', gap: 10 }}>
-              {activeSession.connected && <div style={{ color: '#4ec9b0', fontSize: '0.9em' }}>Connected: {activeSession.config?.host}</div>}
+            <div style={{ height: 40, borderBottom: '1px solid #3d3a39', display: 'flex', alignItems: 'center', padding: '0 14px', gap: 12, backgroundColor: '#101010' }}>
+              {activeSession.connected && (
+                <div style={{ color: '#00d992', fontSize: '0.9em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#00d992', boxShadow: '0 0 8px #00d992' }} />
+                  {activeSession.config?.host}
+                </div>
+              )}
               {!activeSession.connected && activeSession.config && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ color: '#f44336', fontSize: '0.9em' }}>Disconnected</span>
+                  <span style={{ color: '#fb565b', fontSize: '0.9em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#fb565b' }} />
+                    Disconnected
+                  </span>
                   <button
                     onClick={() => reconnect(activeSessionId)}
                     title="재연결"
-                    style={{ background: 'none', border: '1px solid #555', borderRadius: 4, color: '#4ec9b0', cursor: 'pointer', padding: '2px 8px', fontSize: '0.8em', display: 'flex', alignItems: 'center', gap: 4 }}
+                    style={{ background: 'transparent', border: '1px solid #3d3a39', borderRadius: 6, color: '#2fd6a1', cursor: 'pointer', padding: '3px 10px', fontSize: '0.8em', display: 'flex', alignItems: 'center', gap: 4, transition: 'border-color 0.15s' }}
                   >
                     <RefreshCw size={12} /> Reconnect
                   </button>
                 </div>
               )}
               <div style={{ flex: 1 }} />
-              <button onClick={() => setShowSnippets(!showSnippets)} title="Snippets" style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer' }}>
+              <button onClick={() => setShowSnippets(!showSnippets)} title="Snippets" style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', padding: 4 }}>
                 <ClipboardList size={18} />
               </button>
-              <button onClick={() => setShowViHelp(!showViHelp)} title="Vi Cheat Sheet" style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer' }}>
+              <button onClick={() => setShowViHelp(!showViHelp)} title="Vi Cheat Sheet" style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', padding: 4 }}>
                 <HelpCircle size={18} />
               </button>
             </div>
@@ -544,17 +586,17 @@ export default function App() {
               {/* 서버 통계 */}
               {activeSession.serverStats && (
                 <div style={{
-                  height: 30, borderTop: '1px solid #333', backgroundColor: '#252526',
-                  display: 'flex', alignItems: 'center', padding: '0 15px', gap: 20, fontSize: '0.85em', color: '#fff'
+                  height: 32, borderTop: '1px solid #3d3a39', backgroundColor: '#101010',
+                  display: 'flex', alignItems: 'center', padding: '0 15px', gap: 24, fontSize: '0.85em', color: '#f2f2f2'
                 }}>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="CPU Load Average">
-                    <Cpu size={14} color="#4ec9b0" /> {activeSession.serverStats.cpu || '-'}
+                    <Cpu size={14} color="#00d992" /> <span style={{ color: '#b8b3b0' }}>{activeSession.serverStats.cpu || '-'}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Memory Usage">
-                    <MemoryStick size={14} color="#dcb67a" /> {activeSession.serverStats.mem || '-'}
+                    <MemoryStick size={14} color="#818cf8" /> <span style={{ color: '#b8b3b0' }}>{activeSession.serverStats.mem || '-'}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} title="Disk Usage (Root)">
-                    <HardDrive size={14} color="#569cd6" /> {activeSession.serverStats.disk || '-'}
+                    <HardDrive size={14} color="#4cb3d4" /> <span style={{ color: '#b8b3b0' }}>{activeSession.serverStats.disk || '-'}</span>
                   </div>
                 </div>
               )}
@@ -565,27 +607,37 @@ export default function App() {
 
             {/* 로그인 폼 (미연결 시) */}
             {!activeSession.connected && (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ width: 300, padding: 20, backgroundColor: '#252526', borderRadius: 8 }}>
-                  <h3>New Connection</h3>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#050507', overflow: 'hidden' }}>
+                <div style={{
+                  width: 340, padding: 24, backgroundColor: '#101010', borderRadius: 8,
+                  border: '1px solid #3d3a39',
+                  boxShadow: 'rgba(92, 88, 85, 0.2) 0px 0px 15px, rgba(0,0,0,0.7) 0px 20px 60px'
+                }}>
+                  <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1em', fontWeight: 600, color: '#f2f2f2', letterSpacing: '-0.3px' }}>New Connection</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <input placeholder="Name" value={loginForm.name} onChange={e => setLoginForm({ ...loginForm, name: e.target.value })} />
+                    <input placeholder="Name" value={loginForm.name} onChange={e => setLoginForm({ ...loginForm, name: e.target.value })}
+                      style={{ backgroundColor: '#050507', border: '1px solid #3d3a39', color: '#f2f2f2', padding: '8px 12px', borderRadius: 6, outline: 'none', fontSize: '0.9em' }} />
                     <div style={{ display: 'flex', gap: 10 }}>
-                      <input placeholder="Host" style={{ flex: 1 }} value={loginForm.host} onChange={e => setLoginForm({ ...loginForm, host: e.target.value })} />
-                      <input placeholder="Port" style={{ width: 60 }} value={loginForm.port} onChange={e => setLoginForm({ ...loginForm, port: e.target.value })} />
+                      <input placeholder="Host" value={loginForm.host} onChange={e => setLoginForm({ ...loginForm, host: e.target.value })}
+                        style={{ flex: 1, backgroundColor: '#050507', border: '1px solid #3d3a39', color: '#f2f2f2', padding: '8px 12px', borderRadius: 6, outline: 'none', fontSize: '0.9em' }} />
+                      <input placeholder="Port" value={loginForm.port} onChange={e => setLoginForm({ ...loginForm, port: e.target.value })}
+                        style={{ width: 60, backgroundColor: '#050507', border: '1px solid #3d3a39', color: '#f2f2f2', padding: '8px 12px', borderRadius: 6, outline: 'none', fontSize: '0.9em', textAlign: 'center' }} />
                     </div>
-                    <input placeholder="User" value={loginForm.username} onChange={e => setLoginForm({ ...loginForm, username: e.target.value })} />
-                    <input placeholder="Password" type="password" value={loginForm.password} onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} />
+                    <input placeholder="User" value={loginForm.username} onChange={e => setLoginForm({ ...loginForm, username: e.target.value })}
+                      style={{ backgroundColor: '#050507', border: '1px solid #3d3a39', color: '#f2f2f2', padding: '8px 12px', borderRadius: 6, outline: 'none', fontSize: '0.9em' }} />
+                    <input placeholder="Password" type="password" value={loginForm.password} onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                      style={{ backgroundColor: '#050507', border: '1px solid #3d3a39', color: '#f2f2f2', padding: '8px 12px', borderRadius: 6, outline: 'none', fontSize: '0.9em' }} />
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      <div style={{ display: 'flex', gap: 5 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
                         <input
                           placeholder="Private Key Path (Optional)"
                           value={loginForm.privateKey}
                           onChange={e => setLoginForm({ ...loginForm, privateKey: e.target.value })}
-                          style={{ flex: 1, fontSize: '0.8em' }}
+                          style={{ flex: 1, backgroundColor: '#050507', border: '1px solid #3d3a39', color: '#f2f2f2', padding: '8px 12px', borderRadius: 6, outline: 'none', fontSize: '0.8em' }}
                         />
-                        <button onClick={handleKeySelect} style={{ padding: '0 8px' }}>...</button>
+                        <button onClick={handleKeySelect}
+                          style={{ padding: '0 10px', backgroundColor: 'transparent', border: '1px solid #3d3a39', color: '#b8b3b0', borderRadius: 6, cursor: 'pointer' }}>...</button>
                       </div>
                       {loginForm.privateKey && (
                         <input
@@ -593,20 +645,27 @@ export default function App() {
                           type="password"
                           value={loginForm.passphrase}
                           onChange={e => setLoginForm({ ...loginForm, passphrase: e.target.value })}
-                          style={{ fontSize: '0.8em' }}
+                          style={{ backgroundColor: '#050507', border: '1px solid #3d3a39', color: '#f2f2f2', padding: '8px 12px', borderRadius: 6, outline: 'none', fontSize: '0.8em' }}
                         />
                       )}
                     </div>
 
-                    <input placeholder="Group" value={loginForm.group} onChange={e => setLoginForm({ ...loginForm, group: e.target.value })} />
+                    <input placeholder="Group" value={loginForm.group} onChange={e => setLoginForm({ ...loginForm, group: e.target.value })}
+                      style={{ backgroundColor: '#050507', border: '1px solid #3d3a39', color: '#f2f2f2', padding: '8px 12px', borderRadius: 6, outline: 'none', fontSize: '0.9em' }} />
 
-                    <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
                       <button onClick={() => {
                         const err = validateConfig(loginForm)
                         if (err) { showToast(err); return }
                         connect(activeSessionId, loginForm)
-                      }} style={{ flex: 1, padding: 8, cursor: 'pointer' }}>Connect</button>
-                      <button onClick={saveSession} style={{ flex: 1, padding: 8, cursor: 'pointer' }}>{editingSession ? 'Update' : 'Save'}</button>
+                      }} style={{
+                        flex: 1, padding: '10px 16px', cursor: 'pointer', backgroundColor: '#101010', color: '#2fd6a1',
+                        border: '1px solid #3d3a39', borderRadius: 6, fontWeight: 600, fontSize: '0.9em', transition: 'border-color 0.15s'
+                      }}>Connect</button>
+                      <button onClick={saveSession} style={{
+                        flex: 1, padding: '10px 16px', cursor: 'pointer', backgroundColor: 'transparent', color: '#f2f2f2',
+                        border: '1px solid #3d3a39', borderRadius: 6, fontWeight: 500, fontSize: '0.9em', transition: 'border-color 0.15s'
+                      }}>{editingSession ? 'Update' : 'Save'}</button>
                     </div>
                   </div>
                 </div>
@@ -616,9 +675,14 @@ export default function App() {
 
         </div>
       ) : (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', flexDirection: 'column', gap: 20 }}>
-          <div>No Open Tabs</div>
-          <button onClick={() => createNewTab()} style={{ padding: '10px 20px', cursor: 'pointer' }}>Create New Tab</button>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8b949e', flexDirection: 'column', gap: 24 }}>
+          <div style={{ fontSize: '1.1em', fontWeight: 400, letterSpacing: '-0.3px' }}>No Open Tabs</div>
+          <button onClick={() => createNewTab()} style={{
+            padding: '12px 24px', cursor: 'pointer', backgroundColor: '#101010', color: '#2fd6a1',
+            border: '1px solid #3d3a39', borderRadius: 6, fontWeight: 600, fontSize: '0.95em',
+            boxShadow: '0 0 12px rgba(0, 217, 146, 0.1)',
+            transition: 'border-color 0.15s, box-shadow 0.15s'
+          }}>Create New Tab</button>
         </div>
       )}
     </div>

@@ -18,20 +18,20 @@ export const ViCheatSheet = ({ onClose }: any) => {
 
   return (
     <div style={{
-      position: 'absolute', right: 20, top: 50, width: 250, 
-      backgroundColor: '#252526', border: '1px solid #444', 
-      boxShadow: '0 4px 6px rgba(0,0,0,0.3)', color: '#fff', 
-      zIndex: 1000, borderRadius: 4
+      position: 'absolute', right: 20, top: 50, width: 260,
+      backgroundColor: '#101010', border: '1px solid #3d3a39',
+      boxShadow: 'rgba(92, 88, 85, 0.2) 0px 0px 15px, rgba(0,0,0,0.7) 0px 20px 60px',
+      color: '#f2f2f2', zIndex: 1000, borderRadius: 8
     }}>
-      <div style={{ padding: 10, borderBottom: '1px solid #444', display: 'flex', justifyContent: 'space-between' }}>
-        <strong>Vi Cheat Sheet</strong>
-        <X size={16} onClick={onClose} style={{ cursor: 'pointer' }} />
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid #3d3a39', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <strong style={{ fontSize: '0.9em', fontWeight: 600, letterSpacing: '-0.2px' }}>Vi Cheat Sheet</strong>
+        <X size={16} onClick={onClose} style={{ cursor: 'pointer', color: '#8b949e' }} />
       </div>
-      <div style={{ padding: 10, maxHeight: 400, overflowY: 'auto' }}>
+      <div style={{ padding: 12, maxHeight: 400, overflowY: 'auto' }}>
         {commands.map((c, i) => (
-          <div key={i} style={{ marginBottom: 8, fontSize: '0.9em' }}>
-            <div style={{ color: '#4ec9b0', fontWeight: 'bold' }}>{c.cmd}</div>
-            <div style={{ color: '#ccc' }}>{c.desc}</div>
+          <div key={i} style={{ marginBottom: 10, fontSize: '0.9em' }}>
+            <div style={{ color: '#00d992', fontWeight: 600, fontFamily: 'SFMono-Regular, Consolas, monospace', fontSize: '0.95em' }}>{c.cmd}</div>
+            <div style={{ color: '#b8b3b0', marginTop: 1 }}>{c.desc}</div>
           </div>
         ))}
       </div>
