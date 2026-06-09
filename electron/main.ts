@@ -41,6 +41,11 @@ function encryptSessionData(data: any): any {
       if (s.passphrase) s.passphrase = encryptValue(s.passphrase)
     })
   })
+  // recentSessions도 암호화
+  clone.recentSessions?.forEach((s: any) => {
+    if (s.password) s.password = encryptValue(s.password)
+    if (s.passphrase) s.passphrase = encryptValue(s.passphrase)
+  })
   clone._encrypted = true
   return clone
 }
@@ -54,22 +59,44 @@ function decryptSessionData(data: any): any {
       if (s.passphrase) s.passphrase = decryptValue(s.passphrase)
     })
   })
+  clone.recentSessions?.forEach((s: any) => {
+    if (s.password) s.password = decryptValue(s.password)
+    if (s.passphrase) s.passphrase = decryptValue(s.passphrase)
+  })
   delete clone._encrypted
   return clone
 }
 
 // --- 세션/스니펫 로드/저장 ---
 function loadSessions() {
-  if (!fs.existsSync(DATA_FILE)) return { groups: [], sessions: [] }
+  if (!fs.existsSync(DATA_FILE)) return { groups: [], sessions: [], recentSessions: [] }
   try {
     const raw = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'))
-    return decryptSessionData(raw)
-  } catch { return { groups: [], sessions: [] } }
+    const decrypted = decryptSessionData(raw)
+    if (!decrypted.recentSessions) decrypted.recentSessions = []
+    return decrypted
+  } catch { return { groups: [], sessions: [], recentSessions: [] } }
 }
 
 function saveSessions(data: any) {
   const encrypted = encryptSessionData(data)
   fs.writeFileSync(DATA_FILE, JSON.stringify(encrypted, null, 2))
+}
+
+// 최근 접속 기록 갱신 — 연결 성공 시 호출
+function updateRecentSession(sessionConfig: any) {
+  const data = loadSessions()
+  const recent = data.recentSessions || []
+
+  // 같은 host+username+port 이면 기존 항목 제거 후 맨 앞에 추가
+  const filtered = recent.filter(
+    (r: any) => !(r.host === sessionConfig.host && r.username === sessionConfig.username && r.port === sessionConfig.port)
+  )
+  filtered.unshift({ ...sessionConfig, lastConnected: new Date().toISOString() })
+
+  // 최대 10개 유지
+  data.recentSessions = filtered.slice(0, 10)
+  saveSessions(data)
 }
 
 function loadSnippets() {
@@ -159,6 +186,15 @@ ipcMain.on('connect-ssh', (event, { sessionId, config }) => {
   conn.on('ready', () => {
     event.reply('ssh-ready', sessionId)
     startPolling(sessionId, event)
+
+    // 연결 성공 시 최근 접속 목록 갱신
+    try {
+      const configToSave = { ...config }
+      // privateKey가 Buffer로 변환됐을 수 있으므로 원래 경로 문자열은 잃어버림
+      // config.privateKeyPath를 별도로 전달받거나 여기서 처리
+      if (Buffer.isBuffer(configToSave.privateKey)) delete configToSave.privateKey
+      updateRecentSession(configToSave)
+    } catch { /* 기록 실패해도 연결은 계속 진행 */ }
 
     conn.shell((err, stream) => {
       if (err) return event.reply('ssh-error', { sessionId, message: err.message })
@@ -277,29 +313,69 @@ ipcMain.on('sftp-navigate', (event, { sessionId, path: targetPath }) => {
   })
 })
 
-// SFTP 업로드
+// --- SFTP 업로드 (디렉토리 재귀 지원) ---
 ipcMain.on('sftp-upload', (event, { sessionId, remotePath, localPaths }) => {
   const session = connections[sessionId]
   if (!session?.sftp) return
 
+  let total = 0
   let completed = 0
+
+  function countItems(localPath: string): number {
+    const stat = fs.statSync(localPath)
+    if (stat.isDirectory()) {
+      const children = fs.readdirSync(localPath)
+      return children.reduce((acc, c) => acc + countItems(path.join(localPath, c)), 0)
+    }
+    return 1
+  }
+
+  function uploadItem(localPath: string, remoteDir: string, done: () => void) {
+    const stat = fs.statSync(localPath)
+    const name = path.basename(localPath)
+    const remoteDest = path.posix.join(remoteDir, name)
+
+    if (stat.isDirectory()) {
+      // 원격에 디렉토리 생성 후 하위 항목 재귀 업로드
+      session.sftp.mkdir(remoteDest, (mkErr: any) => {
+        // 이미 존재하는 경우 무시
+        const children = fs.readdirSync(localPath)
+        if (children.length === 0) { done(); return }
+        let childDone = 0
+        children.forEach(child => {
+          uploadItem(path.join(localPath, child), remoteDest, () => {
+            childDone++
+            if (childDone === children.length) done()
+          })
+        })
+      })
+    } else {
+      session.sftp.fastPut(localPath, remoteDest, (err: any) => {
+        if (err) {
+          event.reply('ssh-error', { sessionId, message: `업로드 실패 (${name}): ${err.message}` })
+        }
+        completed++
+        event.reply('sftp-progress', { sessionId, completed, total, name })
+        done()
+      })
+    }
+  }
+
+  // 파일/디렉토리 개수 미리 산정
+  localPaths.forEach((lp: string) => { total += countItems(lp) })
+
+  let rootDone = 0
   localPaths.forEach((localPath: string) => {
-    const filename = path.basename(localPath)
-    const dest = path.posix.join(remotePath, filename)
-    session.sftp.fastPut(localPath, dest, (err: any) => {
-      completed++
-      if (err) {
-        event.reply('ssh-error', { sessionId, message: `업로드 실패 (${filename}): ${err.message}` })
-      }
-      // 모든 파일 업로드 완료 후, 세션이 아직 유효하면 목록 갱신
-      if (completed === localPaths.length && connections[sessionId]) {
+    uploadItem(localPath, remotePath, () => {
+      rootDone++
+      if (rootDone === localPaths.length && connections[sessionId]) {
         refreshSftp(sessionId, remotePath, event)
       }
     })
   })
 })
 
-// SFTP 드래그 다운로드
+// --- SFTP 드래그 다운로드 (단일 파일 → startDrag) ---
 ipcMain.on('sftp-drag-start', (event, { sessionId, remotePath, file }) => {
   const session = connections[sessionId]
   if (!session?.sftp) return
@@ -314,6 +390,162 @@ ipcMain.on('sftp-drag-start', (event, { sessionId, remotePath, file }) => {
     }
     tempFiles.push(tempPath)
     event.sender.startDrag({ file: tempPath, icon: '' })
+  })
+})
+
+// --- SFTP 다운로드 (저장 다이얼로그 방식 — 파일/디렉토리 모두 지원) ---
+ipcMain.handle('sftp-download-dialog', async (event, { sessionId, remotePath, file }) => {
+  if (!mainWindow) return false
+  const session = connections[sessionId]
+  if (!session?.sftp) return false
+
+  const isDir = !!(file.attrs.mode & 0o40000)
+
+  if (isDir) {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: `"${file.filename}" 저장 위치 선택`,
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (result.canceled || result.filePaths.length === 0) return false
+    const destDir = result.filePaths[0]
+    await downloadDirRecursive(session.sftp, path.posix.join(remotePath, file.filename), path.join(destDir, file.filename), event, sessionId)
+  } else {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: file.filename,
+      title: `"${file.filename}" 저장`
+    })
+    if (result.canceled || !result.filePath) return false
+    await new Promise<void>((resolve, reject) => {
+      session.sftp.fastGet(path.posix.join(remotePath, file.filename), result.filePath!, (err: any) => {
+        if (err) reject(err); else resolve()
+      })
+    }).catch(err => {
+      event.sender.send('ssh-error', { sessionId, message: `다운로드 실패: ${err.message}` })
+      return false
+    })
+  }
+
+  event.sender.send('sftp-download-done', { sessionId })
+  return true
+})
+
+// 디렉토리 재귀 다운로드 헬퍼
+async function downloadDirRecursive(sftp: any, remoteSrc: string, localDest: string, event: any, sessionId: string) {
+  if (!fs.existsSync(localDest)) fs.mkdirSync(localDest, { recursive: true })
+
+  const list: any[] = await new Promise((resolve, reject) => {
+    sftp.readdir(remoteSrc, (err: any, files: any[]) => err ? reject(err) : resolve(files))
+  })
+
+  for (const f of list) {
+    const srcPath = path.posix.join(remoteSrc, f.filename)
+    const destPath = path.join(localDest, f.filename)
+    if (f.attrs.mode & 0o40000) {
+      await downloadDirRecursive(sftp, srcPath, destPath, event, sessionId)
+    } else {
+      await new Promise<void>((resolve, reject) => {
+        sftp.fastGet(srcPath, destPath, (err: any) => {
+          if (err) { event.sender.send('ssh-error', { sessionId, message: `다운로드 실패 (${f.filename}): ${err.message}` }); resolve() }
+          else resolve()
+        })
+      })
+    }
+  }
+}
+
+// --- SFTP 내부 이동 (rename) ---
+ipcMain.on('sftp-move', (event, { sessionId, srcPath, destPath, currentPath }) => {
+  const session = connections[sessionId]
+  if (!session?.sftp) return
+
+  session.sftp.rename(srcPath, destPath, (err: any) => {
+    if (err) {
+      event.reply('ssh-error', { sessionId, message: `이동 실패: ${err.message}` })
+      return
+    }
+    refreshSftp(sessionId, currentPath, event)
+  })
+})
+
+// --- SFTP 이름 변경 ---
+ipcMain.on('sftp-rename', (event, { sessionId, oldPath, newPath, currentPath }) => {
+  const session = connections[sessionId]
+  if (!session?.sftp) return
+
+  session.sftp.rename(oldPath, newPath, (err: any) => {
+    if (err) {
+      event.reply('ssh-error', { sessionId, message: `이름 변경 실패: ${err.message}` })
+      return
+    }
+    refreshSftp(sessionId, currentPath, event)
+  })
+})
+
+// --- SFTP 삭제 (파일/디렉토리 재귀) ---
+ipcMain.on('sftp-delete', (event, { sessionId, targetPath, isDir, currentPath }) => {
+  const session = connections[sessionId]
+  if (!session?.sftp) return
+
+  if (isDir) {
+    deleteDirRecursive(session.sftp, targetPath, (err: any) => {
+      if (err) {
+        event.reply('ssh-error', { sessionId, message: `삭제 실패: ${err.message}` })
+        return
+      }
+      refreshSftp(sessionId, currentPath, event)
+    })
+  } else {
+    session.sftp.unlink(targetPath, (err: any) => {
+      if (err) {
+        event.reply('ssh-error', { sessionId, message: `삭제 실패: ${err.message}` })
+        return
+      }
+      refreshSftp(sessionId, currentPath, event)
+    })
+  }
+})
+
+// 디렉토리 재귀 삭제 헬퍼
+function deleteDirRecursive(sftp: any, dirPath: string, callback: (err: any) => void) {
+  sftp.readdir(dirPath, (err: any, list: any[]) => {
+    if (err) { callback(err); return }
+
+    let pending = list.length
+    if (pending === 0) {
+      sftp.rmdir(dirPath, callback)
+      return
+    }
+
+    list.forEach((f: any) => {
+      const childPath = path.posix.join(dirPath, f.filename)
+      if (f.attrs.mode & 0o40000) {
+        deleteDirRecursive(sftp, childPath, (err: any) => {
+          if (err) { callback(err); return }
+          pending--
+          if (pending === 0) sftp.rmdir(dirPath, callback)
+        })
+      } else {
+        sftp.unlink(childPath, (err: any) => {
+          if (err) { callback(err); return }
+          pending--
+          if (pending === 0) sftp.rmdir(dirPath, callback)
+        })
+      }
+    })
+  })
+}
+
+// --- SFTP 새 폴더 ---
+ipcMain.on('sftp-mkdir', (event, { sessionId, dirPath, currentPath }) => {
+  const session = connections[sessionId]
+  if (!session?.sftp) return
+
+  session.sftp.mkdir(dirPath, (err: any) => {
+    if (err) {
+      event.reply('ssh-error', { sessionId, message: `폴더 생성 실패: ${err.message}` })
+      return
+    }
+    refreshSftp(sessionId, currentPath, event)
   })
 })
 

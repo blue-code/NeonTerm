@@ -3,17 +3,19 @@ import { contextBridge, ipcRenderer } from 'electron'
 // 허용된 IPC 채널만 노출 (보안 — 화이트리스트 방식)
 const SEND_CHANNELS = [
   'connect-ssh', 'disconnect-ssh', 'term-input', 'term-resize',
-  'sftp-navigate', 'sftp-upload', 'sftp-drag-start'
+  'sftp-navigate', 'sftp-upload', 'sftp-drag-start',
+  'sftp-move', 'sftp-delete', 'sftp-rename', 'sftp-mkdir'
 ]
 
 const RECEIVE_CHANNELS = [
   'term-data', 'ssh-ready', 'ssh-error', 'ssh-closed',
-  'sftp-list', 'server-stats'
+  'sftp-list', 'server-stats', 'sftp-progress', 'sftp-download-done'
 ]
 
 const INVOKE_CHANNELS = [
   'get-sessions', 'save-sessions', 'get-snippets', 'save-snippets',
-  'dialog-open-file', 'import-sessions', 'export-sessions'
+  'dialog-open-file', 'import-sessions', 'export-sessions',
+  'sftp-download-dialog'
 ]
 
 contextBridge.exposeInMainWorld('electronAPI', {
