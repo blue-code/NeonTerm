@@ -67,4 +67,3 @@ npm run build
 
 ## 📝 라이선스 (License)
 MIT License - 자유롭게 수정하고 배포할 수 있습니다.
-**Created for BH 💕 by Tiffany**
